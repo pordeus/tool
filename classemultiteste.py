@@ -94,14 +94,22 @@ class MultiTeste:
         if self.tipoDado == 'multiclasse':
             self.y = LabelBinarizer().fit_transform(y)
 
-    
+
+    ##
+    # Função que executa todos os testes. 
+    # Ao instanciar a classe, informar no parametro
+    # tipoDado se é 'binaria' ou 'multiclasse'. Isso fará
+    # o tratamento correto do vetor y para o case de multiplas 
+    # categorias de classificação. A saída da função é o um dataframe
+    # com os resultados.
+    ##     
     def Teste(self):
         seed = 10
         splits = 10
         qtd_modelos = 0
         algoritmos = []
         acuracia = []
-        roc_auc = []
+#        roc_auc = []
         revogacao = []
         precisao = []
         f1 = []
@@ -133,6 +141,12 @@ class MultiTeste:
         self.resultados['f1'] = f1
         return self.resultados
 
+    ##
+    # Função para ordenar pela métrica a saída da Função Teste. 
+    # Não faz sentido ser usada antes desta função.
+    # O parametro 'metrica' é uma string e assume os valores
+    # 'accuracy', 'recall', 'precision', 'f1'
+    ##
     def OrdenaMetrica(self, metrica):
         return self.resultados.sort_values(metrica, ascending=False, ignore_index=True)
 
