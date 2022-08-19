@@ -24,5 +24,5 @@ ordenada = MT.OrdenaMetrica('acurácia')
 
 resposta
 
-ordenada = MT.OrdenaMetrica('acurácia')
+ordenada = MT.OrdenaMetrica(resposta, 'acurácia')
 ordenada
