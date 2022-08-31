@@ -12,13 +12,16 @@ v2 (19/08/2022):
     - Disponibilizado função de regressão.
 v3 (25/08/2022)
     - Regressão especifica para dados médicos.
-    
+v4 (31/08/2022)
+    - Classificação multiclasses
+    - sorteio de base de dados para treino e teste gerais
+    - sorteio de base de dados para treino e teste médicos,
+        considerando mais de um exame por paciente    
     
 Desenvolvido por Daniel Pordeus Menezes
 Disponível em
     https://github.com/pordeus/tool/
 """
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -26,6 +29,8 @@ warnings.filterwarnings('ignore')
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import random
+from typing import Counter
 from sklearn import model_selection
 
 #Algoritmos classificadores
@@ -73,6 +78,7 @@ from sklearn.neural_network import MLPRegressor
 #Apoio especifico
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score, recall_score, precision_score
 from sklearn.metrics import mean_squared_error,mean_absolute_error#, root_mean_squared_error
+from sklearn.metrics import classification_report
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.gaussian_process.kernels import RBF
@@ -124,15 +130,26 @@ class MultiTeste:
    #     if self.tipoDado == 'multiclasse':
    #         self.y = LabelBinarizer().fit_transform(y)
 ###
-    def __init__(self, X_treino, y_treino, X_teste, y_teste, tipoDado):
+    def __init__(self, bancoDados, coluna, divisao_treino, tipoEstudo):
+        if (tipoEstudo == 'exames'):
+            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
+        else:
+            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteioTreinoTeste(bancoDados, divisao_treino)
+            #self.setvalues(X_treino, X_teste, y_treino, y_teste)
+        #self.X_treino = preprocessing.normalize(X_treino, norm='l2')
+        #self.X_teste = preprocessing.normalize(X_teste, norm='l2')
+        #self.y_treino = y_treino
+        #self.y_teste = y_teste
+        #self.tipoDado = tipoDado
+        #if self.tipoDado == 'multiclasse':
+        #    self.y_treino = LabelBinarizer().fit_transform(y_treino)
+        #    self.y_teste = LabelBinarizer().fit_transform(y_teste)
+
+    def setvalues(self, X_treino, X_teste, y_treino, y_teste):
         self.X_treino = preprocessing.normalize(X_treino, norm='l2')
         self.X_teste = preprocessing.normalize(X_teste, norm='l2')
         self.y_treino = y_treino
         self.y_teste = y_teste
-        self.tipoDado = tipoDado
-        if self.tipoDado == 'multiclasse':
-            self.y_treino = LabelBinarizer().fit_transform(y_treino)
-            self.y_teste = LabelBinarizer().fit_transform(y_teste)
 
     ##
     # Função que executa todos os testes de Classificação. 
@@ -193,7 +210,7 @@ class MultiTeste:
         resultados = pd.DataFrame(columns=['algoritmo','f1','acurácia', 'roc_auc', 'revogação', 'precisão'])
         metricas_class = [f1_score, accuracy_score, roc_auc_score, recall_score, precision_score]
                     
-        for modelo in self.regressores:
+        for modelo in self.classificadores:
             print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
             #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
@@ -222,6 +239,26 @@ class MultiTeste:
         resultados['precisão'] = precisao
         resultados['f1'] = f1
         return resultados
+    
+    def ClassificadorMultiClasse(self, classes):
+        qtd_modelos = 0
+     #   algoritmos = []
+     #   acuracia = []
+     #   roc_auc = []
+     #   revogacao = []
+     #   precisao = []
+     #   f1 = []
+     #   resultados = pd.DataFrame(columns=['algoritmo','f1','acurácia', 'roc_auc', 'revogação', 'precisão'])
+        #metricas_class = [f1_score, accuracy_score, roc_auc_score, recall_score, precision_score]
+                    
+        for modelo in self.classificadores:
+            print(f"Processando {modelo.__class__.__name__}")
+            qtd_modelos += 1
+            #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
+            #algoritmos.append(modelo.__class__.__name__)
+            self.avaliaClassificadorMultiClasse(modelo, self.X_treino, self.y_treino, self.X_teste, self.y_teste, classes)
+        print("Fim de Processamento.")
+
 
     def F1_score(self, revocacao, precisao):
         return 2*(revocacao*precisao)/(revocacao+precisao)
@@ -272,11 +309,23 @@ class MultiTeste:
         #metrica_val = []
         #metrica_train = []
         clf.fit(X_treino, y_treino)
-        y_pred_val = clf.predict(X_teste)
         y_pred_train = clf.predict(X_treino)
+        y_pred_val = clf.predict(X_teste)
         metrica_teste = f_metrica(y_teste, y_pred_val)
         metrica_treino = f_metrica(y_treino, y_pred_train)
         return metrica_treino, metrica_teste
+    
+    def avaliaClassificadorMultiClasse(self, clf, X_treino, y_treino, X_teste, y_teste, classes):
+        #metrica_val = []
+        #metrica_train = []
+        clf.fit(X_treino, y_treino)
+        y_pred_train = clf.predict(X_treino)
+        y_pred_val = clf.predict(X_teste)
+        print("Treinamento")
+        print(classification_report(y_treino, y_pred_train, target_names=classes))
+        print("Teste - Validação")
+        print(classification_report(y_teste, y_pred_val, target_names=classes))
+        #return metrica_treino, metrica_teste
 
     def apresentaMetrica(self, nome_metrica, metrica_val, metrica_train, percentual = False):
         c = 100.0 if percentual else 1.0
@@ -362,4 +411,99 @@ class MultiTeste:
         resultados['MAE'] = MAE
         resultados['RMSE'] = RMSE
         return resultados
+    
+    
+    ## procedimento de sorteio de exames
+    # considera como entrada o dataframe completo. 
+    # Deve ser informado o nome da coluna em que se encontram
+    # o nome dos pacientes para que o código faça a contagem.
+    # O percentual solicitado é a divisão que se deseja entre 
+    # treino e teste.
+    ##
+    def sorteiaExames(self, bancoDados, coluna, percentual_treino):
+        Pacientes = Counter(bancoDados[coluna])
+        Pacientes_Numpy = np.array(list(Pacientes.items()))
+        
+        soma_exames = 0
+        for x in Pacientes_Numpy:
+            soma_exames += int(x[1]) #somo a quantidade de exames de cada paciente
+        
+        percent = percentual_treino/100 #percentual de exames para treinamento
+        qtd_exames_treino = int(round(percent*soma_exames))
+        qtd_exames_teste = soma_exames - qtd_exames_treino
+        
+        dataset_numpy = np.array(bancoDados)
+        
+        sorteados_teste = 0
+        pacientes_teste = []
+        while sorteados_teste < qtd_exames_teste:
+            sorteado = random.choice(list(Pacientes.items()))
+            sorteados_teste += int(sorteado[1])
+            Pacientes.pop(sorteado[0])
+            for exame in np.where(dataset_numpy == sorteado[0])[0]:
+                pacientes_teste.append(dataset_numpy[exame])
+        
+        #pacientes teste
+        pacientes_teste = np.array(pacientes_teste)
+        pacientes_teste.shape
+        
+        #montando conjunto diferença - pacientes treinamento
+        pacientes_treinamento = []
+        for restante in Pacientes:
+            #print(restante)
+            for exame in np.where(dataset_numpy == restante)[0]:
+                pacientes_treinamento.append(dataset_numpy[exame])
+                #pacientes_treinamento.append(exame)
+        pacientes_treinamento = np.array(pacientes_treinamento)
+        
+        pacientes_treinamento = np.array(pacientes_treinamento)
+        pacientes_treinamento.shape
+        
+        paciente_treino_df = pd.DataFrame(pacientes_treinamento)
+        paciente_teste_df = pd.DataFrame(pacientes_teste)
+        
+        #eliminando coluna dos pacientes, considerando que é a 1a
+        paciente_treino_df = paciente_treino_df.drop(0, axis=1)
+        paciente_teste_df = paciente_teste_df.drop(0, axis=1)
+        
+        #montagem dos y's
+        cols = paciente_treino_df.shape[1]        
+        y_treino = paciente_treino_df[paciente_treino_df.columns[cols-1]]
+        y_treino = np.array(y_treino, dtype=int)
+        y_teste = paciente_teste_df[paciente_treino_df.columns[cols-1]]
+        y_teste = np.array(y_teste, dtype=int)
+        
+        #montagem dos X's
+        X_treino = np.array(paciente_treino_df, dtype=float)
+        X_teste = np.array(paciente_teste_df, dtype=float)
+        return X_treino, X_teste, y_treino, y_teste
+
+    ## procedimento de sorteio padrão para treinamento e teste.
+    # Tem como entrada o dataframe completo. 
+    # Deve ser informado o nome da coluna em que se encontram
+    # É considerado que a coluna Y seja sempre a última do dataset.
+    # O percentual solicitado é a divisão que se deseja entre 
+    # treino e teste.
+    ##
+    def sorteioTreinoTeste(self, bancoDados, percentual_treino):
+        base_numpy = np.array(bancoDados)
+        qtd_dados = base_numpy.shape[0]
+        qtd_dados_treino = int(np.round(qtd_dados*percentual_treino))
+
+        embaralhado = np.random.permutation(base_numpy)
+        Treino = embaralhado[0:qtd_dados_treino,:]
+        Teste = embaralhado[qtd_dados_treino:,:]
+        
+        coluna = base_numpy.shape[1] - 1
+        #X
+        X_treino = Treino[:,:coluna]
+        X_teste = Teste[:,:coluna]
+        
+        #Y
+        y_treino = Treino[:,coluna]
+        y_teste = Teste[:,coluna]
+
+        return X_treino, X_teste, y_treino, y_teste
+
+        
 
