@@ -16,7 +16,10 @@ v4 (31/08/2022)
     - Classificação multiclasses
     - sorteio de base de dados para treino e teste gerais
     - sorteio de base de dados para treino e teste médicos,
-        considerando mais de um exame por paciente    
+        considerando mais de um exame por paciente
+v5 (?)
+    - Gridsearch (?)
+    
     
 Desenvolvido por Daniel Pordeus Menezes
 Disponível em
@@ -28,7 +31,7 @@ warnings.filterwarnings('ignore')
 #Apoio
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import random
 from typing import Counter
 from sklearn import model_selection
@@ -36,33 +39,33 @@ from sklearn import model_selection
 #Algoritmos classificadores
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import ExtraTreeClassifier
-from sklearn.multioutput import ClassifierChain
-from sklearn.multioutput import MultiOutputClassifier
-from sklearn.multiclass import OutputCodeClassifier
-from sklearn.multiclass import OneVsOneClassifier
+#from sklearn.tree import ExtraTreeClassifier
+#from sklearn.multioutput import ClassifierChain
+#from sklearn.multioutput import MultiOutputClassifier
+#from sklearn.multiclass import OutputCodeClassifier
+#from sklearn.multiclass import OneVsOneClassifier
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.naive_bayes import BernoulliNB
-from sklearn.calibration import CalibratedClassifierCV
+#from sklearn.naive_bayes import BernoulliNB
+#from sklearn.calibration import CalibratedClassifierCV
 from sklearn.naive_bayes import GaussianNB
-from sklearn.semi_supervised import LabelPropagation
-from sklearn.semi_supervised import LabelSpreading
+#from sklearn.semi_supervised import LabelPropagation
+#from sklearn.semi_supervised import LabelSpreading
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import LogisticRegressionCV
-from sklearn.naive_bayes import MultinomialNB  
-from sklearn.neighbors import NearestCentroid
-from sklearn.linear_model import Perceptron
+#from sklearn.naive_bayes import MultinomialNB  
+#from sklearn.neighbors import NearestCentroid
+#from sklearn.linear_model import Perceptron
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
-from sklearn.mixture import GaussianMixture
-from sklearn.svm import LinearSVC, NuSVC, SVC
+#from sklearn.mixture import GaussianMixture
+from sklearn.svm import LinearSVC, SVC
 from sklearn.linear_model import SGDClassifier
 from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier, RandomForestClassifier, AdaBoostClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from lightgbm import LGBMClassifier
-from sklearn.linear_model import SGDClassifier
+#from sklearn.linear_model import SGDClassifier
 
 #algoritmos regressores
 from sklearn.linear_model import LinearRegression
@@ -79,10 +82,10 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score, recall_score, precision_score
 from sklearn.metrics import mean_squared_error,mean_absolute_error#, root_mean_squared_error
 from sklearn.metrics import classification_report
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+#from sklearn.pipeline import Pipeline
+#from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.gaussian_process.kernels import RBF
-from sklearn.preprocessing import LabelBinarizer
+#from sklearn.preprocessing import LabelBinarizer
 from sklearn import preprocessing
 
 class MultiTeste:
@@ -202,13 +205,11 @@ class MultiTeste:
     def ClassificadorMedico(self):
         qtd_modelos = 0
         algoritmos = []
-        acuracia = []
-        roc_auc = []
         revogacao = []
         precisao = []
         f1 = []
-        resultados = pd.DataFrame(columns=['algoritmo','f1','acurácia', 'roc_auc', 'revogação', 'precisão'])
-        metricas_class = [f1_score, accuracy_score, roc_auc_score, recall_score, precision_score]
+        resultados = pd.DataFrame(columns=['algoritmo', 'revogação', 'precisão', 'f1'])
+        metricas_class = [recall_score, precision_score, f1_score]
                     
         for modelo in self.classificadores:
             print(f"Processando {modelo.__class__.__name__}")
@@ -217,24 +218,20 @@ class MultiTeste:
             algoritmos.append(modelo.__class__.__name__)
             qual_metrica = 0
             for metrica in metricas_class:
-                resultado_treino, resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
-                                                                                   self.X_teste, self.y_teste, metrica)
+                #_, resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
+                #                                                                   self.X_teste, self.y_teste, metrica)
+                modelo.fit(self.X_treino, self.y_treino)
+                y_pred_teste = modelo.predict(self.X_teste)
                 if qual_metrica == 0:
-                    f1.append(resultado_teste)
+                    revogacao.append(recall_score(self.y_teste, y_pred_teste, average="weighted"))
                 if qual_metrica == 1:
-                    acuracia.append(resultado_teste)
+                    precisao.append(precision_score(self.y_teste, y_pred_teste, average="weighted"))
                 if qual_metrica == 2:
-                    roc_auc.append(resultado_teste)
-                if qual_metrica == 3:
-                    revogacao.append(resultado_teste)
-                if qual_metrica == 4:
-                    precisao.append(resultado_teste)
+                    f1.append(f1_score(self.y_teste, y_pred_teste, average="weighted"))
                 qual_metrica += 1
         print("Fim de Processamento.")
 
         resultados['algoritmo'] = algoritmos
-        resultados['roc_auc'] = roc_auc
-        resultados['acurácia'] = acuracia
         resultados['revogação'] = revogacao
         resultados['precisão'] = precisao
         resultados['f1'] = f1
@@ -242,23 +239,10 @@ class MultiTeste:
     
     def ClassificadorMultiClasse(self, classes):
         qtd_modelos = 0
-     #   algoritmos = []
-     #   acuracia = []
-     #   roc_auc = []
-     #   revogacao = []
-     #   precisao = []
-     #   f1 = []
-     #   resultados = pd.DataFrame(columns=['algoritmo','f1','acurácia', 'roc_auc', 'revogação', 'precisão'])
-        #metricas_class = [f1_score, accuracy_score, roc_auc_score, recall_score, precision_score]
-                    
         for modelo in self.classificadores:
-            print(f"Processando {modelo.__class__.__name__}")
+            print(f"Algoritmo {modelo.__class__.__name__}")
             qtd_modelos += 1
-            #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
-            #algoritmos.append(modelo.__class__.__name__)
             self.avaliaClassificadorMultiClasse(modelo, self.X_treino, self.y_treino, self.X_teste, self.y_teste, classes)
-        print("Fim de Processamento.")
-
 
     def F1_score(self, revocacao, precisao):
         return 2*(revocacao*precisao)/(revocacao+precisao)
@@ -316,14 +300,10 @@ class MultiTeste:
         return metrica_treino, metrica_teste
     
     def avaliaClassificadorMultiClasse(self, clf, X_treino, y_treino, X_teste, y_teste, classes):
-        #metrica_val = []
-        #metrica_train = []
         clf.fit(X_treino, y_treino)
-        y_pred_train = clf.predict(X_treino)
         y_pred_val = clf.predict(X_teste)
-        print("Treinamento")
-        print(classification_report(y_treino, y_pred_train, target_names=classes))
-        print("Teste - Validação")
+        #print(classification_report(y_treino, y_pred_train, target_names=classes))
+        #print("Teste - Validação")
         print(classification_report(y_teste, y_pred_val, target_names=classes))
         #return metrica_treino, metrica_teste
 
@@ -339,9 +319,12 @@ class MultiTeste:
     # O parametro 'metrica' é uma string e assume os valores
     # 'accuracy', 'recall', 'precision', 'f1', 'MAE', 'MSE' ou 'RMSE'
     ##
-    def OrdenaMetrica(self, saida, metrica):
+    def OrdenaMetrica(self, saida, metrica, descendente):
         self.saida = saida
-        return self.saida.sort_values(metrica, ascending=True, ignore_index=True)
+        ascendente = True
+        if (descendente.lower() == "sim"):
+            ascendente = False
+        return self.saida.sort_values(metrica, ascending=ascendente, ignore_index=True)
 
     def Regressao(self):
         seed = 10
