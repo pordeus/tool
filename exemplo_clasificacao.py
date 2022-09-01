@@ -18,3 +18,7 @@ coluna = 'Nome do Paciente'
 MT = MultiTeste(dataset, coluna, 70, "exames")
 X_treino, X_teste, y_treino, y_teste = MT.sorteiaExames(dataset, coluna, 80)
 MT.ClassificadorMultiClasse(classes=['Baixo','Leve', 'Moderado','Grave'])
+
+resultado = MT.ClassificadorMedico()
+ordenada = MT.OrdenaMetrica(resultado,'revogação',"sim")
+print(ordenada)
