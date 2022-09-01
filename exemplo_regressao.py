@@ -21,5 +21,6 @@ MT = MultiTeste(dataset, coluna, 80, "exames")
 resposta = MT.RegressaoMedica()
 print(resposta)
 
-ordenada = MT.OrdenaMetrica(resposta, 'MSE')
+ordenada = MT.OrdenaMetrica(resposta, 'MSE', "sim")
 print(ordenada)
+
