@@ -125,14 +125,7 @@ class MultiTeste:
         SVR(),
         MLPRegressor()
     ]
-####
-   # def __init__(self, X, y, tipoDado):
-   #     self.X = preprocessing.normalize(X, norm='l2')
-   #     self.y = y
-   #     self.tipoDado = tipoDado
-   #     if self.tipoDado == 'multiclasse':
-   #         self.y = LabelBinarizer().fit_transform(y)
-###
+
     def __init__(self, bancoDados, coluna, divisao_treino, tipoEstudo):
         if (tipoEstudo == 'exames'):
             self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
@@ -487,6 +480,3 @@ class MultiTeste:
         y_teste = Teste[:,coluna]
 
         return X_treino, X_teste, y_treino, y_teste
-
-        
-
