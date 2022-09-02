@@ -155,7 +155,7 @@ class MultiTeste:
     # categorias de classificação. A saída da função é o um dataframe
     # com os resultados.
     ##  
-    def Classificacao(self):
+    def Classificador(self):
         seed = 10
         splits = 10
         qtd_modelos = 0
@@ -195,7 +195,9 @@ class MultiTeste:
         resultados['f1'] = f1
         return resultados
     
-    def ClassificadorMedico(self):
+    
+    # tipoDado = [binary, multiclasse=[weighted, sampled, etc]]
+    def ClassificadorMedico(self, tipoDado):
         qtd_modelos = 0
         algoritmos = []
         revogacao = []
@@ -216,11 +218,11 @@ class MultiTeste:
                 modelo.fit(self.X_treino, self.y_treino)
                 y_pred_teste = modelo.predict(self.X_teste)
                 if qual_metrica == 0:
-                    revogacao.append(recall_score(self.y_teste, y_pred_teste, average="weighted"))
+                    revogacao.append(recall_score(self.y_teste, y_pred_teste, average=tipoDado))
                 if qual_metrica == 1:
-                    precisao.append(precision_score(self.y_teste, y_pred_teste, average="weighted"))
+                    precisao.append(precision_score(self.y_teste, y_pred_teste, average=tipoDado))
                 if qual_metrica == 2:
-                    f1.append(f1_score(self.y_teste, y_pred_teste, average="weighted"))
+                    f1.append(f1_score(self.y_teste, y_pred_teste, average=tipoDado))
                 qual_metrica += 1
         print("Fim de Processamento.")
 
@@ -480,3 +482,6 @@ class MultiTeste:
         y_teste = Teste[:,coluna]
 
         return X_treino, X_teste, y_treino, y_teste
+
+        
+
