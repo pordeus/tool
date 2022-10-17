@@ -17,8 +17,9 @@ v4 (31/08/2022)
     - sorteio de base de dados para treino e teste gerais
     - sorteio de base de dados para treino e teste médicos,
         considerando mais de um exame por paciente
-v5 (?)
-    - Gridsearch (?)
+v5 (30/09/2022)
+    - Método para sortear dados para treino, validação e teste
+    em GridSearch
     
     
 Desenvolvido por Daniel Pordeus Menezes
@@ -77,10 +78,11 @@ from sklearn.linear_model import BayesianRidge
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import confusion_matrix
 
 #Apoio especifico
-from sklearn.metrics import f1_score, accuracy_score, roc_auc_score, recall_score, precision_score
-from sklearn.metrics import mean_squared_error,mean_absolute_error#, root_mean_squared_error
+from sklearn.metrics import f1_score, precision_score, recall_score# , accuracy_score, roc_auc_score
+from sklearn.metrics import mean_squared_error,mean_absolute_error, r2_score, median_absolute_error#, root_mean_squared_error
 from sklearn.metrics import classification_report
 #from sklearn.pipeline import Pipeline
 #from sklearn.preprocessing import OneHotEncoder, LabelEncoder
@@ -125,12 +127,15 @@ class MultiTeste:
         SVR(),
         MLPRegressor()
     ]
+    
+    MatrizConf = []
 
-    def __init__(self, bancoDados, coluna, divisao_treino, tipoEstudo):
-        if (tipoEstudo == 'exames'):
-            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
-        else:
-            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteioTreinoTeste(bancoDados, divisao_treino)
+    def __init__(self):#, bancoDados, coluna, divisao_treino, tipoEstudo):
+        pass
+        #if (tipoEstudo == 'exames'):
+        #    self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
+        #else:
+        #    self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteioTreinoTeste(bancoDados, divisao_treino)
             #self.setvalues(X_treino, X_teste, y_treino, y_teste)
         #self.X_treino = preprocessing.normalize(X_treino, norm='l2')
         #self.X_teste = preprocessing.normalize(X_teste, norm='l2')
@@ -146,6 +151,13 @@ class MultiTeste:
         self.X_teste = preprocessing.normalize(X_teste, norm='l2')
         self.y_treino = y_treino
         self.y_teste = y_teste
+
+    def Sorteio(self, bancoDados, coluna, divisao_treino, tipoEstudo):
+        if (tipoEstudo.lower() == 'exames'):
+            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
+        else:
+            self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteioTreinoTeste(bancoDados, divisao_treino)
+        
 
     ##
     # Função que executa todos os testes de Classificação. 
@@ -169,7 +181,7 @@ class MultiTeste:
         metricas_class = ['accuracy', 'recall', 'precision', 'f1']
         
         for modelo in self.classificadores:
-            print(f"Processando {modelo.__class__.__name__}")
+            #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
             kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
             algoritmos.append(modelo.__class__.__name__)
@@ -185,7 +197,7 @@ class MultiTeste:
                 if qual_metrica == 3:
                     f1.append(cv_results.mean())
                 qual_metrica += 1
-        print("Fim de Processamento.")
+        #print("Fim de Processamento.")
 
         resultados['algoritmo'] = algoritmos
         #resultados['roc_auc'] = roc_auc
@@ -207,7 +219,7 @@ class MultiTeste:
         metricas_class = [recall_score, precision_score, f1_score]
                     
         for modelo in self.classificadores:
-            print(f"Processando {modelo.__class__.__name__}")
+            #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
             #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
             algoritmos.append(modelo.__class__.__name__)
@@ -217,6 +229,7 @@ class MultiTeste:
                 #                                                                   self.X_teste, self.y_teste, metrica)
                 modelo.fit(self.X_treino, self.y_treino)
                 y_pred_teste = modelo.predict(self.X_teste)
+                self.MatrizConf.append(confusion_matrix(self.y_teste, y_pred_teste))
                 if qual_metrica == 0:
                     revogacao.append(recall_score(self.y_teste, y_pred_teste, average=tipoDado))
                 if qual_metrica == 1:
@@ -224,7 +237,7 @@ class MultiTeste:
                 if qual_metrica == 2:
                     f1.append(f1_score(self.y_teste, y_pred_teste, average=tipoDado))
                 qual_metrica += 1
-        print("Fim de Processamento.")
+        #print("Fim de Processamento.")
 
         resultados['algoritmo'] = algoritmos
         resultados['revogação'] = revogacao
@@ -233,10 +246,10 @@ class MultiTeste:
         return resultados
     
     def ClassificadorMultiClasse(self, classes):
-        qtd_modelos = 0
+        #qtd_modelos = 0
         for modelo in self.classificadores:
             print(f"Algoritmo {modelo.__class__.__name__}")
-            qtd_modelos += 1
+            #qtd_modelos += 1
             self.avaliaClassificadorMultiClasse(modelo, self.X_treino, self.y_treino, self.X_teste, self.y_teste, classes)
 
     def F1_score(self, revocacao, precisao):
@@ -288,11 +301,13 @@ class MultiTeste:
         #metrica_val = []
         #metrica_train = []
         clf.fit(X_treino, y_treino)
-        y_pred_train = clf.predict(X_treino)
+        #y_pred_train = clf.predict(X_treino)
         y_pred_val = clf.predict(X_teste)
         metrica_teste = f_metrica(y_teste, y_pred_val)
-        metrica_treino = f_metrica(y_treino, y_pred_train)
-        return metrica_treino, metrica_teste
+        #metrica_treino = f_metrica(y_treino, y_pred_train)
+        #print(f"Score Treino: {clf.score(X_treino, y_pred_train)}")
+        #print(f"Score Teste: {clf.score(X_teste, y_pred_val)}")
+        return metrica_teste#metrica_treino, metrica_teste
     
     def avaliaClassificadorMultiClasse(self, clf, X_treino, y_treino, X_teste, y_teste, classes):
         clf.fit(X_treino, y_treino)
@@ -333,13 +348,13 @@ class MultiTeste:
         metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
         
         for modelo in self.regressores:
-            print(f"Processando {modelo.__class__.__name__}")
+            #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
             kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
             algoritmos.append(modelo.__class__.__name__)
             qual_metrica = 0
             for metrica in metricas_reg:
-                cv_results = model_selection.cross_val_score(modelo, self.X, self.y, cv=kfold, scoring=metrica)
+                cv_results = model_selection.cross_val_score(modelo, self.X_treino, self.y_treino, cv=kfold, scoring=metrica)
                 if qual_metrica == 0:
                     MSE.append(cv_results.mean())
                 if qual_metrica == 1:
@@ -347,7 +362,7 @@ class MultiTeste:
                 if qual_metrica == 2:
                     RMSE.append(cv_results.mean())
                 qual_metrica += 1
-        print("Fim de Processamento.")
+        #print("Fim de Processamento.")
 
         resultados['algoritmo'] = algoritmos
         resultados['MSE'] = MSE
@@ -360,35 +375,78 @@ class MultiTeste:
         algoritmos = []
         MSE = []
         MAE = []
-        RMSE = []
-        resultados = pd.DataFrame(columns=['algoritmo','MSE', 'MAE', 'RMSE'])
+        #RMSE = []
+        R2 = []
+        MEDIANA = []
+        resultados = pd.DataFrame(columns=['Algoritmo','MSE', 'MAE', 'R2', 'MEDIANA EA'])
         #metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
-        metricas_reg = [mean_squared_error,mean_absolute_error]#,root_mean_squared_error]
+        metricas_reg = [mean_squared_error, mean_absolute_error, r2_score, median_absolute_error]#,root_mean_squared_error]
         
         for modelo in self.regressores:
-            print(f"Processando {modelo.__class__.__name__}")
+            #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
             #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
             algoritmos.append(modelo.__class__.__name__)
             qual_metrica = 0
             for metrica in metricas_reg:
-                resultado_treino, resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
+                #print(f"Metrica {metrica}")
+                resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
                                                                                    self.X_teste, self.y_teste, metrica)
                 if qual_metrica == 0:
                     MSE.append(resultado_teste)
-                    RMSE.append(np.sqrt(resultado_teste))
+                    #RMSE.append(np.sqrt(resultado_teste))
                 if qual_metrica == 1:
                     MAE.append(resultado_teste)
-                #if qual_metrica == 2:
-                #   RMSE.append(resultado_teste)
+                if qual_metrica == 2:
+                   R2.append(resultado_teste)
+                if qual_metrica == 3:
+                   MEDIANA.append(resultado_teste)
                 qual_metrica += 1
-        print("Fim de Processamento.")
+        #print("Fim de Processamento.")
 
-        resultados['algoritmo'] = algoritmos
+        resultados['Algoritmo'] = algoritmos
         resultados['MSE'] = MSE
         resultados['MAE'] = MAE
-        resultados['RMSE'] = RMSE
+        resultados['R2'] = R2
+        resultados['MEDIANA EA'] = MEDIANA
         return resultados
+    
+    def RegressaoMedicaAlgoritmo(self, modelo):
+        algoritmos = []
+        MSE = []
+        MAE = []
+        R2 = []
+        MEDIANA = []
+        resultados = pd.DataFrame(columns=['Algoritmo','MSE', 'MAE', 'R2', 'MEDIANA EA'])
+        #metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
+        metricas_reg = [mean_squared_error, mean_absolute_error, r2_score, median_absolute_error]#,root_mean_squared_error]
+        
+        #print(f"Processando {modelo.__class__.__name__}")
+        algoritmos.append(modelo.__class__.__name__)
+        qual_metrica = 0
+        for metrica in metricas_reg:
+            #print(f"Metrica {metrica}")
+            resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
+                                                                               self.X_teste, self.y_teste, metrica)
+            if qual_metrica == 0:
+                MSE.append(resultado_teste)
+                #RMSE.append(np.sqrt(resultado_teste))
+            if qual_metrica == 1:
+                MAE.append(resultado_teste)
+            if qual_metrica == 2:
+               R2.append(resultado_teste)
+            if qual_metrica == 3:
+               MEDIANA.append(resultado_teste)
+            qual_metrica += 1
+        #print("Fim de Processamento.")
+
+        resultados['Algoritmo'] = algoritmos
+        resultados['MSE'] = MSE
+        resultados['MAE'] = MAE
+        resultados['R2'] = R2
+        resultados['MEDIANA EA'] = MEDIANA
+        return resultados    
+    
     
     
     ## procedimento de sorteio de exames
@@ -464,9 +522,10 @@ class MultiTeste:
     # treino e teste.
     ##
     def sorteioTreinoTeste(self, bancoDados, percentual_treino):
+        percent = percentual_treino/100
         base_numpy = np.array(bancoDados)
         qtd_dados = base_numpy.shape[0]
-        qtd_dados_treino = int(np.round(qtd_dados*percentual_treino))
+        qtd_dados_treino = int(np.round(qtd_dados*percent))
 
         embaralhado = np.random.permutation(base_numpy)
         Treino = embaralhado[0:qtd_dados_treino,:]
@@ -478,10 +537,39 @@ class MultiTeste:
         X_teste = Teste[:,:coluna]
         
         #Y
-        y_treino = Treino[:,coluna]
+        y_treino = Treino[:,coluna] #tb pode ser usado o -1
         y_teste = Teste[:,coluna]
 
         return X_treino, X_teste, y_treino, y_teste
 
+    ## procedimento de sorteio para treinamento e teste
+    # em GRIDSEARCH. Está fixo o valor de 60/20/20 como padrão
+    # para a separação do conjunto de dados.
+    ##
+    def sorteioTreinoValidacaoTeste(self, bancoDados):
+        percent_treino = 0.6
+        percent_valid = 0.2
+        #percent_teste = 0.2
+        base_numpy = np.array(bancoDados)
+        qtd_dados = base_numpy.shape[0]
+        qtd_dados_treino = int(np.round(qtd_dados*percent_treino))
+        qtd_dados_valid = int(np.round(qtd_dados*percent_valid))
+
+        embaralhado = np.random.permutation(base_numpy)
+        Treino = embaralhado[0:qtd_dados_treino,:]
+        Validacao = embaralhado[qtd_dados_treino:qtd_dados_valid,:]
+        Teste = embaralhado[qtd_dados_treino+qtd_dados_valid:,:]
         
+        coluna = base_numpy.shape[1] - 1
+        #X
+        X_treino = Treino[:,:coluna]
+        X_valid = Validacao[:,:coluna]
+        X_teste = Teste[:,:coluna]
+        
+        #Y
+        y_treino = Treino[:,coluna] #tb pode ser usado o -1
+        y_valid = Validacao[:,coluna]
+        y_teste = Teste[:,coluna]
+
+        return X_treino, X_valid, X_teste, y_treino, y_valid, y_teste
 
