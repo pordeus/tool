@@ -20,6 +20,11 @@ v4 (31/08/2022)
 v5 (30/09/2022)
     - Método para sortear dados para treino, validação e teste
     em GridSearch
+v6 (14/10/2022)
+    - Calculo da Matriz de Confusão, que fica armazenado numa
+    lista para ser utilizada quando desejável.
+    - Método para sortear dados para treino, validação e teste
+    em GridSearch com segrega;áo de exames por paciente.
     
     
 Desenvolvido por Daniel Pordeus Menezes
@@ -448,7 +453,6 @@ class MultiTeste:
         return resultados    
     
     
-    
     ## procedimento de sorteio de exames
     # considera como entrada o dataframe completo. 
     # Deve ser informado o nome da coluna em que se encontram
@@ -493,7 +497,7 @@ class MultiTeste:
         pacientes_treinamento = np.array(pacientes_treinamento)
         
         pacientes_treinamento = np.array(pacientes_treinamento)
-        pacientes_treinamento.shape
+        #pacientes_treinamento.shape
         
         paciente_treino_df = pd.DataFrame(pacientes_treinamento)
         paciente_teste_df = pd.DataFrame(pacientes_teste)
@@ -573,3 +577,84 @@ class MultiTeste:
 
         return X_treino, X_valid, X_teste, y_treino, y_valid, y_teste
 
+
+    ## procedimento de sorteio de exames
+    # considera como entrada o dataframe completo. 
+    # Deve ser informado o nome da coluna em que se encontram
+    # o nome dos pacientes para que o código faça a contagem.
+    # O percentual solicitado é a divisão que se deseja entre 
+    # treino e teste.
+    ##
+    def sorteiaExamesValidacao(self, bancoDados, coluna):
+        Pacientes = Counter(bancoDados[coluna])
+        Pacientes_Numpy = np.array(list(Pacientes.items()))
+        
+        soma_exames = 0
+        for x in Pacientes_Numpy:
+            soma_exames += int(x[1]) #somo a quantidade de exames de cada paciente
+        
+        percent = 0.6 #percentual de exames para treinamento
+        qtd_exames_treino = int(round(percent*soma_exames))
+        qtd_exames_valid = int(round(0.2*soma_exames))
+        qtd_exames_teste = soma_exames - qtd_exames_treino - qtd_exames_valid
+        
+        dataset_numpy = np.array(bancoDados)
+        
+        sorteados_valid = 0
+        pacientes_valid = []
+        while sorteados_valid < qtd_exames_valid:
+            sorteado = random.choice(list(Pacientes.items()))
+            sorteados_valid += int(sorteado[1])
+            Pacientes.pop(sorteado[0])
+            for exame in np.where(dataset_numpy == sorteado[0])[0]:
+                pacientes_valid.append(dataset_numpy[exame])
+        
+        #pacientes validação
+        pacientes_valid = np.array(pacientes_valid)
+        
+        
+        sorteados_teste = 0
+        pacientes_teste = []
+        while sorteados_teste < qtd_exames_teste:
+            sorteado = random.choice(list(Pacientes.items()))
+            sorteados_teste += int(sorteado[1])
+            Pacientes.pop(sorteado[0])
+            for exame in np.where(dataset_numpy == sorteado[0])[0]:
+                pacientes_teste.append(dataset_numpy[exame])
+        
+        #pacientes teste
+        pacientes_teste = np.array(pacientes_teste)
+        #pacientes_teste.shape
+        
+        #montando conjunto diferença - pacientes treinamento
+        pacientes_treinamento = []
+        for restante in Pacientes:
+            #print(restante)
+            for exame in np.where(dataset_numpy == restante)[0]:
+                pacientes_treinamento.append(dataset_numpy[exame])
+                #pacientes_treinamento.append(exame)
+        pacientes_treinamento = np.array(pacientes_treinamento)
+                
+        paciente_treino_df = pd.DataFrame(pacientes_treinamento)
+        paciente_teste_df = pd.DataFrame(pacientes_teste)
+        paciente_valid_df = pd.DataFrame(pacientes_valid)
+        
+        #eliminando coluna dos pacientes, considerando que é a 1a
+        paciente_treino_df = paciente_treino_df.drop(0, axis=1)
+        paciente_teste_df = paciente_teste_df.drop(0, axis=1)
+        paciente_valid_df = paciente_valid_df.drop(0, axis=1)
+        
+        #montagem dos y's
+        cols = paciente_treino_df.shape[1]        
+        y_treino = paciente_treino_df[paciente_treino_df.columns[cols-1]]
+        y_treino = np.array(y_treino, dtype=int)
+        y_teste = paciente_teste_df[paciente_teste_df.columns[cols-1]]
+        y_teste = np.array(y_teste, dtype=int)
+        y_valid = paciente_valid_df[paciente_valid_df.columns[cols-1]]
+        y_valid = np.array(y_valid, dtype=int)
+        
+        #montagem dos X's
+        X_treino = np.array(paciente_treino_df, dtype=float)
+        X_teste = np.array(paciente_teste_df, dtype=float)
+        X_valid = np.array(paciente_valid_df, dtype=float)
+        return X_treino, X_valid, X_teste, y_treino, y_valid, y_teste
