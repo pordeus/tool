@@ -86,7 +86,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import confusion_matrix
 
 #Apoio especifico
-from sklearn.metrics import f1_score, precision_score, recall_score# , accuracy_score, roc_auc_score
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, roc_auc_score
 from sklearn.metrics import mean_squared_error,mean_absolute_error, r2_score, median_absolute_error#, root_mean_squared_error
 from sklearn.metrics import classification_report
 #from sklearn.pipeline import Pipeline
@@ -219,8 +219,10 @@ class MultiTeste:
         algoritmos = []
         revogacao = []
         precisao = []
+        acuracia = []
+        roc = []
         f1 = []
-        resultados = pd.DataFrame(columns=['algoritmo', 'revogação', 'precisão', 'f1'])
+        resultados = pd.DataFrame(columns=['algoritmo', 'revogação', 'precisão', 'f1', 'acurácia', 'roc auc'])
         metricas_class = [recall_score, precision_score, f1_score]
                     
         for modelo in self.classificadores:
@@ -234,13 +236,17 @@ class MultiTeste:
                 #                                                                   self.X_teste, self.y_teste, metrica)
                 modelo.fit(self.X_treino, self.y_treino)
                 y_pred_teste = modelo.predict(self.X_teste)
-                self.MatrizConf.append(confusion_matrix(self.y_teste, y_pred_teste))
+                self.MatrizConf.append([modelo.__class__.__name__, metrica, confusion_matrix(self.y_teste, y_pred_teste)])
                 if qual_metrica == 0:
                     revogacao.append(recall_score(self.y_teste, y_pred_teste, average=tipoDado))
                 if qual_metrica == 1:
                     precisao.append(precision_score(self.y_teste, y_pred_teste, average=tipoDado))
                 if qual_metrica == 2:
                     f1.append(f1_score(self.y_teste, y_pred_teste, average=tipoDado))
+                if qual_metrica == 3:
+                    acuracia.append(accuracy_score(self.y_teste, y_pred_teste, average=tipoDado))
+                if qual_metrica == 4:
+                    roc.append(roc_auc_score(self.y_teste, y_pred_teste, average=tipoDado))
                 qual_metrica += 1
         #print("Fim de Processamento.")
 
@@ -248,6 +254,8 @@ class MultiTeste:
         resultados['revogação'] = revogacao
         resultados['precisão'] = precisao
         resultados['f1'] = f1
+        resultados['acurácia'] = f1
+        resultados['roc auc'] = f1
         return resultados
     
     def ClassificadorMultiClasse(self, classes):
