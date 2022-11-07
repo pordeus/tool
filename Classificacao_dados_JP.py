@@ -137,7 +137,7 @@ print(f"F1  = {f1_score(y_teste, y_prev_melhor)}")
 print(f"Precisão  = {precision_score(y_teste, y_prev_melhor)}")
 print(f"Acurácia = {accuracy_score(y_teste, y_prev_melhor)}")
 print(f"ROC AUC = {roc_auc_score(y_teste, y_prev_melhor)}")
-
+print(f"Importancia das Features: {gbr_melhor.feature_importances_}")
 (ConfusionMatrixDisplay(confusion_matrix=matriz_confusao)).plot()
 plt.show()
 
@@ -167,7 +167,6 @@ print(f"Acurácia = {accuracy_score(y_valid, y_predict)}")
 print(f"ROC AUC = {roc_auc_score(y_valid, y_predict)}")
 
 # meu gridsearch para DecisionTree
-
 inicio = time.time()
 medicao_dtc = 0
 pontos = []
@@ -200,39 +199,37 @@ print(f"F1  = {f1_score(y_teste, y_prev_melhor)}")
 print(f"Precisão  = {precision_score(y_teste, y_prev_melhor)}")
 print(f"Acurácia = {accuracy_score(y_teste, y_prev_melhor)}")
 print(f"ROC AUC = {roc_auc_score(y_teste, y_prev_melhor)}")
-
+print(f"Importancia das Features: {melhor_dtc.feature_importances_}")
 (ConfusionMatrixDisplay(confusion_matrix=matriz_confusao)).plot()
 plt.show()
 
 
 ## Avaliação com Feature Selection
-#from sklearn.feature_selection import RFE
-from sklearn.feature_selection import RFECV
+from sklearn.feature_selection import RFE
+#from sklearn.feature_selection import RFECV
 
 estimator = melhor_dtc
-#for numero in range(5,int(dataset.shape[0])):
-#selector = RFE(estimator, n_features_to_select=numero, step=1)
-selector = RFECV(estimator, step=1, cv=5)
-selector = selector.fit(X_treino, y_treino)
-print(f"Suporte: {selector.support_} ")
-print(f"Ranking: {selector.ranking_}")
+for numero in range(5,int(dataset.shape[0])):
+    selector = RFE(estimator, n_features_to_select=numero, step=1)
+    #selector = RFECV(estimator, step=1, cv=5)
+    selector = selector.fit(X_treino, y_treino)
+    #print(f"Suporte: {selector.support_} ")
+    #print(f"Ranking: {selector.ranking_}")
+    print(f"Redução: {selector.transform(X_treino)} ")
+    #selector.cv_results_
+    #print(f"Funcao Decisão: {selector.decision_function(X_treino)}")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#análise de correlação
+dataset.corr()
+dataset.corr().to_excel("matrizCorrelacao.xlsx")
+#Mapa de calor
+import matplotlib.pyplot as plt
+import seaborn as sns
+plt.figure(figsize=(30, 21))
+sns.heatmap(dataset.corr(),
+            annot = True,
+            fmt = '.2f',
+            cmap='Blues')
+plt.title('Correlação entre variáveis do dataset Covid')
+plt.show()
