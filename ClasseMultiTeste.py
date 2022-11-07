@@ -493,7 +493,6 @@ class MultiTeste:
         
         #pacientes teste
         pacientes_teste = np.array(pacientes_teste)
-        pacientes_teste.shape
         
         #montando conjunto diferença - pacientes treinamento
         pacientes_treinamento = []
@@ -520,6 +519,10 @@ class MultiTeste:
         y_treino = np.array(y_treino, dtype=int)
         y_teste = paciente_teste_df[paciente_treino_df.columns[cols-1]]
         y_teste = np.array(y_teste, dtype=int)
+        
+        #eliminando ultima coluna dos X
+        paciente_treino_df = paciente_treino_df.drop(cols, axis=1)
+        paciente_teste_df = paciente_teste_df.drop(cols, axis=1)
         
         #montagem dos X's
         X_treino = np.array(paciente_treino_df, dtype=float)
@@ -661,7 +664,12 @@ class MultiTeste:
         y_valid = paciente_valid_df[paciente_valid_df.columns[cols-1]]
         y_valid = np.array(y_valid, dtype=int)
         
-        #montagem dos X's
+        #eliminando ultima coluna dos X
+        paciente_treino_df = paciente_treino_df.drop(cols, axis=1)
+        paciente_teste_df = paciente_teste_df.drop(cols, axis=1)
+        paciente_valid_df = paciente_valid_df.drop(cols, axis=1)
+        
+        #conversao dos X's
         X_treino = np.array(paciente_treino_df, dtype=float)
         X_teste = np.array(paciente_teste_df, dtype=float)
         X_valid = np.array(paciente_valid_df, dtype=float)
