@@ -25,6 +25,8 @@ v6 (14/10/2022)
     lista para ser utilizada quando desejável.
     - Método para sortear dados para treino, validação e teste
     em GridSearch com segrega;áo de exames por paciente.
+v7 (12/11/2022)
+    - Metodo de Leave One Out considernando exames por paciente.
     
     
 Desenvolvido por Daniel Pordeus Menezes
@@ -41,6 +43,7 @@ import numpy as np
 import random
 from typing import Counter
 from sklearn import model_selection
+#import utils
 
 #Algoritmos classificadores
 from sklearn.tree import DecisionTreeClassifier
@@ -49,7 +52,6 @@ from sklearn.neighbors import KNeighborsClassifier
 #from sklearn.multioutput import ClassifierChain
 #from sklearn.multioutput import MultiOutputClassifier
 #from sklearn.multiclass import OutputCodeClassifier
-#from sklearn.multiclass import OneVsOneClassifier
 from sklearn.multiclass import OneVsRestClassifier
 #from sklearn.naive_bayes import BernoulliNB
 #from sklearn.calibration import CalibratedClassifierCV
@@ -114,7 +116,7 @@ class MultiTeste:
         AdaBoostClassifier(),
         LinearDiscriminantAnalysis(),
         QuadraticDiscriminantAnalysis(),
-        OneVsRestClassifier(LinearSVC(random_state=0)), #multiclass
+        OneVsRestClassifier(LinearSVC(random_state=0, dual=False)), #multiclass
         LGBMClassifier(),
         GradientBoostingClassifier(),
         SGDClassifier(),
@@ -674,3 +676,89 @@ class MultiTeste:
         X_teste = np.array(paciente_teste_df, dtype=float)
         X_valid = np.array(paciente_valid_df, dtype=float)
         return X_treino, X_valid, X_teste, y_treino, y_valid, y_teste
+    
+    ## procedimento de treinamento onde escolhe-se a janela minima
+     # de teste, retira-a da base e executa o treinamento com o restante.
+     # Retorna a média da métrica selecionada.
+    ##
+    def deixaUmFora(self, modelo, bancoDados, qtdRodadas, metrica):
+        bancoDados = np.random.permutation(bancoDados)
+        #tamJanela = np.ceil(len(bancoDados)/qtdRodadas)
+        
+        resultado_metrica = 0
+        tamanho = len(bancoDados)
+        comprimento = tamanho//qtdRodadas
+        for i in range(0,tamanho-1, comprimento):
+            #print(i)
+            teste = bancoDados[i:(i+comprimento)]
+            #print(teste)
+            auxiliar = np.arange(i,(i+comprimento))
+            treino = np.delete(bancoDados, auxiliar,0)
+            #print(treino)
+            X_treino  = treino[:,1:-1]
+            y_treino = treino[:,-1]
+            #y_treino = y_treino.reshape(y_treino.shape[0],1)
+            X_teste = teste[:,1:-1]
+            y_teste = teste[:,-1]
+            print(f"Alvo Y Treino: {utils.multiclass.type_of_target(y_treino)}")
+            #y_teste = y_teste.reshape(y_teste.shape[0],1)
+            #print(f"Formato Y treino: {type(y_treino)}")
+            #print(f"Formato X treino: {type(X_treino)}")
+            modelo.fit(X_treino, y_treino)
+            previsao = modelo.predict(X_teste)
+            resultado_metrica += metrica(y_teste, previsao)
+
+        return resultado_metrica/qtdRodadas
+    
+    
+    
+    def deixaUmForaXY(self, bancoDados, qtdRodadas):
+        bancoDados = np.random.permutation(bancoDados)
+        #tamJanela = np.ceil(len(bancoDados)/qtdRodadas)
+        Xs_treino = []
+        Xs_teste = []
+        ys_treino = []
+        ys_teste = []
+        tamanho = len(bancoDados)
+        comprimento = tamanho//qtdRodadas
+        for i in range(0,tamanho-1, comprimento):
+            #print(i)
+            teste = bancoDados[i:(i+comprimento)]
+            #print(teste)
+            #auxiliar = np.arange(i,(i+comprimento))
+            if (i+comprimento) > len(bancoDados):
+                auxiliar = np.arange(i,(i+comprimento-1))
+            else:
+                auxiliar = np.arange(i,(i+comprimento))
+            treino = np.delete(bancoDados, auxiliar,0)
+            #print(treino)
+            X_treino  = treino[:,1:-1]
+            y_treino = treino[:,-1]
+            #y_treino = y_treino.reshape(y_treino.shape[0],1)
+            X_teste = teste[:,1:-1]
+            y_teste = teste[:,-1]
+            #y_teste = y_teste.reshape(y_teste.shape[0],1)
+            #print(f"Formato Y treino: {type(y_treino)}")
+            #print(f"Formato X treino: {type(X_treino)}")
+            ys_treino.append(y_treino)
+            ys_teste.append(y_teste)
+            Xs_teste.append(X_teste)
+            Xs_treino.append(X_treino)
+
+        return np.array(Xs_treino, dtype=float), np.array(ys_treino, dtype=int), np.array(Xs_teste, dtype=float), np.array(ys_teste, dtype=int)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
