@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """ClasseMultiTeste.ipynb
-Classe para auxiliar na execução de testes 
-utilizando diversos algoritmos de Machine Learning. 
+Classe para auxiliar na execução de testes
+utilizando diversos algoritmos de Machine Learning.
 Nesta primeira versão (18/08/2022) estão disponiveis os recursos:
     - Rodar testes com 16 algoritmos de classificação
     - A classificação pode ser binária ou multiclasse
-    - Os resultados incluem as métricas de acurácia, revogaçao (recall), 
+    - Os resultados incluem as métricas de acurácia, revogaçao (recall),
     precisão e F1-Score
     - Função para ordenar a saída por uma das métricas
 v2 (19/08/2022):
@@ -25,16 +25,17 @@ v6 (14/10/2022)
     lista para ser utilizada quando desejável.
     - Método para sortear dados para treino, validação e teste
     em GridSearch com segrega;áo de exames por paciente.
-v7 (12/11/2022)
-    - Metodo de Leave One Out considernando exames por paciente.
-    
-    
+
+
 Desenvolvido por Daniel Pordeus Menezes
 Disponível em
     https://github.com/pordeus/tool/
 """
 import warnings
 warnings.filterwarnings('ignore')
+
+#GPU
+from numba import jit, cuda
 
 #Apoio
 import pandas as pd
@@ -43,6 +44,7 @@ import numpy as np
 import random
 from typing import Counter
 from sklearn import model_selection
+from sklearn.model_selection import GridSearchCV
 #import utils
 
 #Algoritmos classificadores
@@ -61,7 +63,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import LogisticRegressionCV
-#from sklearn.naive_bayes import MultinomialNB  
+#from sklearn.naive_bayes import MultinomialNB
 #from sklearn.neighbors import NearestCentroid
 #from sklearn.linear_model import Perceptron
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
@@ -103,14 +105,14 @@ class MultiTeste:
         SVC(gamma='auto'),
         GaussianProcessClassifier(1.0 * RBF(1.0)),
         LinearSVC(),
-        SGDClassifier(max_iter=100, tol=1e-3), 
+        SGDClassifier(max_iter=100, tol=1e-3),
         KNeighborsClassifier(),
-        LogisticRegression(solver='lbfgs'), 
-        LogisticRegressionCV(cv=3),
-        BaggingClassifier(), 
+        LogisticRegression(solver='lbfgs'),
+        #LogisticRegressionCV(cv=3),
+        BaggingClassifier(),
         ExtraTreesClassifier(n_estimators=300),
         RandomForestClassifier(max_depth=5, n_estimators=300, max_features=1),
-        GaussianNB(), 
+        GaussianNB(),
         DecisionTreeClassifier(max_depth=5),
         MLPClassifier(alpha=1, max_iter=1000),
         AdaBoostClassifier(),
@@ -118,9 +120,7 @@ class MultiTeste:
         QuadraticDiscriminantAnalysis(),
         OneVsRestClassifier(LinearSVC(random_state=0, dual=False)), #multiclass
         LGBMClassifier(),
-        GradientBoostingClassifier(),
-        SGDClassifier(),
-
+        GradientBoostingClassifier()
     ]
 
     regressores = [
@@ -134,7 +134,7 @@ class MultiTeste:
         SVR(),
         MLPRegressor()
     ]
-    
+
     MatrizConf = []
 
     def __init__(self):#, bancoDados, coluna, divisao_treino, tipoEstudo):
@@ -159,21 +159,20 @@ class MultiTeste:
         self.y_treino = y_treino
         self.y_teste = y_teste
 
-    def Sorteio(self, bancoDados, coluna, divisao_treino, tipoEstudo):
+    def Sorteio(self, bancoDados, coluna, divisao_treino, tipoEstudo='normal'):
         if (tipoEstudo.lower() == 'exames'):
             self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteiaExames(bancoDados, coluna, divisao_treino)
         else:
             self.X_treino, self.X_teste, self.y_treino, self.y_teste = self.sorteioTreinoTeste(bancoDados, divisao_treino)
-        
 
     ##
-    # Função que executa todos os testes de Classificação. 
+    # Função que executa todos os testes de Classificação.
     # Ao instanciar a classe, informar no parametro
     # tipoDado se é 'binaria' ou 'multiclasse'. Isso fará
-    # o tratamento correto do vetor y para o case de multiplas 
+    # o tratamento correto do vetor y para o case de multiplas
     # categorias de classificação. A saída da função é o um dataframe
     # com os resultados.
-    ##  
+    ##
     def Classificador(self):
         seed = 10
         splits = 10
@@ -186,7 +185,7 @@ class MultiTeste:
         f1 = []
         resultados = pd.DataFrame(columns=['algoritmo','acurácia', 'revogação', 'precisão', 'f1'])
         metricas_class = ['accuracy', 'recall', 'precision', 'f1']
-        
+
         for modelo in self.classificadores:
             #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
@@ -213,53 +212,119 @@ class MultiTeste:
         resultados['precisão'] = precisao
         resultados['f1'] = f1
         return resultados
-    
-    
+
+
     # tipoDado = [binary, multiclasse=[weighted, sampled, etc]]
-    def ClassificadorMedico(self, tipoDado):
-        qtd_modelos = 0
+    @jit(target_backend='cuda')
+    def ClassificadorMedico(self):
+        #qtd_modelos = 0
         algoritmos = []
         revogacao = []
         precisao = []
         acuracia = []
-        roc = []
+        #roc = []
         f1 = []
-        resultados = pd.DataFrame(columns=['algoritmo', 'revogação', 'precisão', 'f1', 'acurácia', 'roc auc'])
-        metricas_class = [recall_score, precision_score, f1_score]
-                    
+        resultados = pd.DataFrame(columns=['algoritmo', 'acurácia', 'f1', 'revogação', 'precisão'])#, 'roc auc'])
+        #metricas_class = [recall_score, precision_score, f1_score, accuracy_score]#, roc_auc_score]
+        metricas_class = ["revogacao", "precisao", "f1", "acuracia"]#, roc_auc_score]
         for modelo in self.classificadores:
             #print(f"Processando {modelo.__class__.__name__}")
-            qtd_modelos += 1
-            #kfold = model_selection.KFold(n_splits=splits, random_state=seed, shuffle=True)
             algoritmos.append(modelo.__class__.__name__)
-            qual_metrica = 0
+            #qual_metrica = 0
+            modelo.fit(self.X_treino, self.y_treino)
+            y_pred_teste = modelo.predict(self.X_teste)
+            falsoPositivo, verdadeiroPositivo, falsoNegativo, verdadeiroNegativo = self.metricasBasicas(self.y_teste, y_pred_teste)
+            #self.MatrizConf.append([modelo.__class__.__name__, metrica, confusion_matrix(self.y_teste, y_pred_teste)])
             for metrica in metricas_class:
-                #_, resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
-                #                                                                   self.X_teste, self.y_teste, metrica)
-                modelo.fit(self.X_treino, self.y_treino)
-                y_pred_teste = modelo.predict(self.X_teste)
-                self.MatrizConf.append([modelo.__class__.__name__, metrica, confusion_matrix(self.y_teste, y_pred_teste)])
-                if qual_metrica == 0:
-                    revogacao.append(recall_score(self.y_teste, y_pred_teste, average=tipoDado))
-                if qual_metrica == 1:
-                    precisao.append(precision_score(self.y_teste, y_pred_teste, average=tipoDado))
-                if qual_metrica == 2:
-                    f1.append(f1_score(self.y_teste, y_pred_teste, average=tipoDado))
-                if qual_metrica == 3:
-                    acuracia.append(accuracy_score(self.y_teste, y_pred_teste, average=tipoDado))
-                if qual_metrica == 4:
-                    roc.append(roc_auc_score(self.y_teste, y_pred_teste, average=tipoDado))
-                qual_metrica += 1
+                if metrica == "revogacao": #qual_metrica == 0:
+                    if (verdadeiroPositivo > 0 and verdadeiroNegativo > 0):
+                        revogacao.append(verdadeiroPositivo/(verdadeiroPositivo+verdadeiroNegativo))
+                    else:
+                        #revogacao.append(0)#'NaN')
+                        revogacao.append(recall_score(self.y_teste, y_pred_teste))
+                    #revogacao.append()
+                if metrica == "precisao":# qual_metrica == 1:
+                    if (verdadeiroPositivo > 0 and falsoPositivo > 0):
+                        precisao.append(verdadeiroPositivo/(verdadeiroPositivo+falsoPositivo))
+                    else:
+                        #precisao.append(0)#'NaN')
+                        precisao.append(precision_score(self.y_teste, y_pred_teste))
+                if metrica == "f1": #qual_metrica == 2:
+                    if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0):
+                        f1.append(2*verdadeiroPositivo/(2*verdadeiroPositivo+falsoPositivo+falsoNegativo))
+                    else:
+                        #f1.append(0)#'NaN')
+                        f1.append(f1_score(self.y_teste, y_pred_teste))
+                if metrica == "acuracia": #qual_metrica == 3:
+                    if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0 or verdadeiroNegativo > 0):
+                        acuracia.append((verdadeiroPositivo+verdadeiroNegativo)/(verdadeiroPositivo+verdadeiroNegativo+falsoPositivo+falsoNegativo))
+                    else:
+                        #acuracia.append(0)#'NaN')
+                        acuracia.append(accuracy_score(self.y_teste, y_pred_teste))
+                #if qual_metrica == 4:
+                #    roc.append(roc_auc_score(self.y_teste, y_pred_teste))
+                #qual_metrica += 1
         #print("Fim de Processamento.")
+        #print(f"Shape algoritmos: {len(algoritmos)}")
+        #print(f"Revog Revoação: {len(revogacao)}")
+        #print(f"Shape Precisão: {len(precisao)}")
+        #print(f"Shape F1: {len(f1)}")
+        #print(f"Shape Acurácia: {len(acuracia)}")
+        resultados['algoritmo'] = algoritmos
+        resultados['revogação'] = revogacao
+        resultados['precisão'] = precisao
+        resultados['f1'] = f1
+        resultados['acurácia'] = acuracia
+        #resultados['roc auc'] = roc
+        return resultados
+
+    # tipoDado = [binary, multiclasse=[weighted, sampled, etc]]
+    @jit(target_backend='cuda')
+    def ClassificadorMedico2(self, listaModelos):
+        algoritmos = []
+        revogacao = []
+        precisao = []
+        acuracia = []
+        f1 = []
+        resultados = pd.DataFrame(columns=['algoritmo', 'acurácia', 'f1', 'revogação', 'precisão'])
+        metricas_class = ["revogacao", "precisao", "f1", "acuracia"]
+        for modelo in listaModelos:
+            algoritmos.append(modelo.__class__.__name__)
+            modelo.fit(self.X_treino, self.y_treino)
+            y_pred_teste = modelo.predict(self.X_teste)
+            falsoPositivo, verdadeiroPositivo, falsoNegativo, verdadeiroNegativo = self.metricasBasicas(self.y_teste, y_pred_teste)
+            for metrica in metricas_class:
+                if metrica == "revogacao":
+                    if (verdadeiroPositivo > 0 and verdadeiroNegativo > 0):
+                        revogacao.append(verdadeiroPositivo/(verdadeiroPositivo+verdadeiroNegativo))
+                    else:
+                        if (verdadeiroNegativo > 0):
+                            revogacao.append(0)
+                        else:
+                            revogacao.append(recall_score(self.y_teste, y_pred_teste))
+                if metrica == "precisao":
+                    if (verdadeiroPositivo > 0 and falsoPositivo > 0):
+                        precisao.append(verdadeiroPositivo/(verdadeiroPositivo+falsoPositivo))
+                    else:
+                        precisao.append(precision_score(self.y_teste, y_pred_teste))
+                if metrica == "f1":
+                    if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0):
+                        f1.append(2*verdadeiroPositivo/(2*verdadeiroPositivo+falsoPositivo+falsoNegativo))
+                    else:
+                        f1.append(f1_score(self.y_teste, y_pred_teste))
+                if metrica == "acuracia":
+                    if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0 or verdadeiroNegativo > 0):
+                        acuracia.append((verdadeiroPositivo+verdadeiroNegativo)/(verdadeiroPositivo+verdadeiroNegativo+falsoPositivo+falsoNegativo))
+                    else:
+                        acuracia.append(accuracy_score(self.y_teste, y_pred_teste))
 
         resultados['algoritmo'] = algoritmos
         resultados['revogação'] = revogacao
         resultados['precisão'] = precisao
         resultados['f1'] = f1
-        resultados['acurácia'] = f1
-        resultados['roc auc'] = f1
+        resultados['acurácia'] = acuracia
         return resultados
-    
+
     def ClassificadorMultiClasse(self, classes):
         #qtd_modelos = 0
         for modelo in self.classificadores:
@@ -267,32 +332,58 @@ class MultiTeste:
             #qtd_modelos += 1
             self.avaliaClassificadorMultiClasse(modelo, self.X_treino, self.y_treino, self.X_teste, self.y_teste, classes)
 
-    def F1_score(self, revocacao, precisao):
-        return 2*(revocacao*precisao)/(revocacao+precisao)
-    
+
     def metricasBasicas(self, y_original, y_previsto):
-        falsoPositivo = 0
-        verdadeiroPositivo = 0
-        falsoNegativo = 0
-        verdadeiroNegativo = 0
+        fP = 0
+        vP = 0
+        fN = 0
+        vN = 0
         for x in range(y_original.shape[0]):
             if y_original[x] == 0:
                 if y_previsto[x] == 0:
-                    verdadeiroNegativo = verdadeiroNegativo + 1
+                    vN = vN + 1
                 else:
-                    falsoNegativo = falsoNegativo + 1
+                    fN = fN + 1
             if y_original[x] == 1:
                 if y_previsto[x] == 1:
-                    verdadeiroPositivo = verdadeiroPositivo + 1
+                    vP = vP + 1
                 else:
-                    falsoPositivo = falsoPositivo + 1
-    
-        return falsoPositivo, verdadeiroPositivo, falsoNegativo, verdadeiroNegativo
+                    fP = fP + 1
+
+        return fP, vP, fN, vN
+
+    def medicoesManuais(self, falsoPositivo, verdadeiroPositivo, falsoNegativo, verdadeiroNegativo):
+        #Recall
+        if (verdadeiroPositivo > 0):
+            print(f"-->Revogação: {verdadeiroPositivo/(verdadeiroPositivo+verdadeiroNegativo)}")
+        else:
+            if (verdadeiroNegativo > 0):
+                print("-->Revogação: 0")
+            else:
+                print(f"-->Erro na Revogação. VP={verdadeiroPositivo} VN={verdadeiroNegativo}")
+        #Precisão
+        if (verdadeiroPositivo > 0):
+            print(f"-->Precisão: {verdadeiroPositivo/(verdadeiroPositivo+falsoPositivo)}")
+        else:
+            if(falsoPositivo > 0):
+                print("-->Precisão: 0")
+            else:
+                print(f"-->Erro na Precisão. VP={verdadeiroPositivo} FP={falsoPositivo}")
+        #F1 Score
+        if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0):
+            print(f"-->F1 Score: {(2*verdadeiroPositivo/(2*verdadeiroPositivo+falsoPositivo+falsoNegativo))}")
+        else:
+            print(f"-->Erro no F1 Score. VP={verdadeiroPositivo} FN={falsoNegativo} FP={falsoPositivo}")
+        #Acurácia
+        if (verdadeiroPositivo > 0 or falsoPositivo > 0 or falsoNegativo > 0 or verdadeiroNegativo > 0):
+            print(f"-->Acurácia: {(verdadeiroPositivo+verdadeiroNegativo)/(verdadeiroPositivo+verdadeiroNegativo+falsoPositivo+falsoNegativo)}")
+        else:
+            print(f"-->Erro na Acurácia. VP={verdadeiroPositivo} FN={falsoNegativo} FP={falsoPositivo} VN={verdadeiroNegativo}")
 
     def formataSaida(self, valor):
         saidaFormatada = "{:.2f}".format(valor*100)
         return saidaFormatada + "%"
-    
+
     ## Avaliador padrão
     def avaliaClassificadorGeral(self, clf, kf, X, y, f_metrica):
         metrica_val = []
@@ -323,7 +414,7 @@ class MultiTeste:
         #print(f"Score Treino: {clf.score(X_treino, y_pred_train)}")
         #print(f"Score Teste: {clf.score(X_teste, y_pred_val)}")
         return metrica_teste#metrica_treino, metrica_teste
-    
+
     def avaliaClassificadorMultiClasse(self, clf, X_treino, y_treino, X_teste, y_teste, classes):
         clf.fit(X_treino, y_treino)
         y_pred_val = clf.predict(X_teste)
@@ -339,7 +430,7 @@ class MultiTeste:
 
 
     ##
-    # Função para ordenar pela métrica a saída da Função Teste. 
+    # Função para ordenar pela métrica a saída da Função Teste.
     # Não faz sentido ser usada antes desta função.
     # O parametro 'metrica' é uma string e assume os valores
     # 'accuracy', 'recall', 'precision', 'f1', 'MAE', 'MSE' ou 'RMSE'
@@ -361,7 +452,7 @@ class MultiTeste:
         RMSE = []
         resultados = pd.DataFrame(columns=['algoritmo','MSE', 'MAE', 'RMSE'])
         metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
-        
+
         for modelo in self.regressores:
             #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
@@ -396,7 +487,7 @@ class MultiTeste:
         resultados = pd.DataFrame(columns=['Algoritmo','MSE', 'MAE', 'R2', 'MEDIANA EA'])
         #metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
         metricas_reg = [mean_squared_error, mean_absolute_error, r2_score, median_absolute_error]#,root_mean_squared_error]
-        
+
         for modelo in self.regressores:
             #print(f"Processando {modelo.__class__.__name__}")
             qtd_modelos += 1
@@ -405,7 +496,7 @@ class MultiTeste:
             qual_metrica = 0
             for metrica in metricas_reg:
                 #print(f"Metrica {metrica}")
-                resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
+                resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino,
                                                                                    self.X_teste, self.y_teste, metrica)
                 if qual_metrica == 0:
                     MSE.append(resultado_teste)
@@ -425,7 +516,7 @@ class MultiTeste:
         resultados['R2'] = R2
         resultados['MEDIANA EA'] = MEDIANA
         return resultados
-    
+
     def RegressaoMedicaAlgoritmo(self, modelo):
         algoritmos = []
         MSE = []
@@ -435,13 +526,13 @@ class MultiTeste:
         resultados = pd.DataFrame(columns=['Algoritmo','MSE', 'MAE', 'R2', 'MEDIANA EA'])
         #metricas_reg = ['neg_mean_squared_error','neg_mean_absolute_error','neg_root_mean_squared_error']
         metricas_reg = [mean_squared_error, mean_absolute_error, r2_score, median_absolute_error]#,root_mean_squared_error]
-        
+
         #print(f"Processando {modelo.__class__.__name__}")
         algoritmos.append(modelo.__class__.__name__)
         qual_metrica = 0
         for metrica in metricas_reg:
             #print(f"Metrica {metrica}")
-            resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino, 
+            resultado_teste = self.avaliaClassificadorExames(modelo, self.X_treino, self.y_treino,
                                                                                self.X_teste, self.y_teste, metrica)
             if qual_metrica == 0:
                 MSE.append(resultado_teste)
@@ -460,30 +551,31 @@ class MultiTeste:
         resultados['MAE'] = MAE
         resultados['R2'] = R2
         resultados['MEDIANA EA'] = MEDIANA
-        return resultados    
-    
-    
+        return resultados
+
+
     ## procedimento de sorteio de exames
-    # considera como entrada o dataframe completo. 
+    # considera como entrada o dataframe completo.
     # Deve ser informado o nome da coluna em que se encontram
     # o nome dos pacientes para que o código faça a contagem.
-    # O percentual solicitado é a divisão que se deseja entre 
+    # O percentual solicitado é a divisão que se deseja entre
     # treino e teste.
     ##
     def sorteiaExames(self, bancoDados, coluna, percentual_treino):
         Pacientes = Counter(bancoDados[coluna])
         Pacientes_Numpy = np.array(list(Pacientes.items()))
-        
+
         soma_exames = 0
         for x in Pacientes_Numpy:
             soma_exames += int(x[1]) #somo a quantidade de exames de cada paciente
-        
+
         percent = percentual_treino/100 #percentual de exames para treinamento
         qtd_exames_treino = int(round(percent*soma_exames))
         qtd_exames_teste = soma_exames - qtd_exames_treino
-        
-        dataset_numpy = np.array(bancoDados)
-        
+
+        #dataset_numpy = np.array(bancoDados)
+        dataset_numpy = np.random.permutation(bancoDados)
+
         sorteados_teste = 0
         pacientes_teste = []
         while sorteados_teste < qtd_exames_teste:
@@ -492,10 +584,10 @@ class MultiTeste:
             Pacientes.pop(sorteado[0])
             for exame in np.where(dataset_numpy == sorteado[0])[0]:
                 pacientes_teste.append(dataset_numpy[exame])
-        
+
         #pacientes teste
         pacientes_teste = np.array(pacientes_teste)
-        
+
         #montando conjunto diferença - pacientes treinamento
         pacientes_treinamento = []
         for restante in Pacientes:
@@ -504,38 +596,38 @@ class MultiTeste:
                 pacientes_treinamento.append(dataset_numpy[exame])
                 #pacientes_treinamento.append(exame)
         pacientes_treinamento = np.array(pacientes_treinamento)
-        
+
         pacientes_treinamento = np.array(pacientes_treinamento)
         #pacientes_treinamento.shape
-        
+
         paciente_treino_df = pd.DataFrame(pacientes_treinamento)
         paciente_teste_df = pd.DataFrame(pacientes_teste)
-        
+
         #eliminando coluna dos pacientes, considerando que é a 1a
         paciente_treino_df = paciente_treino_df.drop(0, axis=1)
         paciente_teste_df = paciente_teste_df.drop(0, axis=1)
-        
+
         #montagem dos y's
-        cols = paciente_treino_df.shape[1]        
+        cols = paciente_treino_df.shape[1]
         y_treino = paciente_treino_df[paciente_treino_df.columns[cols-1]]
         y_treino = np.array(y_treino, dtype=int)
         y_teste = paciente_teste_df[paciente_treino_df.columns[cols-1]]
         y_teste = np.array(y_teste, dtype=int)
-        
+
         #eliminando ultima coluna dos X
         paciente_treino_df = paciente_treino_df.drop(cols, axis=1)
         paciente_teste_df = paciente_teste_df.drop(cols, axis=1)
-        
+
         #montagem dos X's
         X_treino = np.array(paciente_treino_df, dtype=float)
         X_teste = np.array(paciente_teste_df, dtype=float)
         return X_treino, X_teste, y_treino, y_teste
 
     ## procedimento de sorteio padrão para treinamento e teste.
-    # Tem como entrada o dataframe completo. 
+    # Tem como entrada o dataframe completo.
     # Deve ser informado o nome da coluna em que se encontram
     # É considerado que a coluna Y seja sempre a última do dataset.
-    # O percentual solicitado é a divisão que se deseja entre 
+    # O percentual solicitado é a divisão que se deseja entre
     # treino e teste.
     ##
     def sorteioTreinoTeste(self, bancoDados, percentual_treino):
@@ -547,12 +639,12 @@ class MultiTeste:
         embaralhado = np.random.permutation(base_numpy)
         Treino = embaralhado[0:qtd_dados_treino,:]
         Teste = embaralhado[qtd_dados_treino:,:]
-        
+
         coluna = base_numpy.shape[1] - 1
         #X
         X_treino = Treino[:,:coluna]
         X_teste = Teste[:,:coluna]
-        
+
         #Y
         y_treino = Treino[:,coluna] #tb pode ser usado o -1
         y_teste = Teste[:,coluna]
@@ -576,13 +668,13 @@ class MultiTeste:
         Treino = embaralhado[0:qtd_dados_treino,:]
         Validacao = embaralhado[qtd_dados_treino:qtd_dados_valid,:]
         Teste = embaralhado[qtd_dados_treino+qtd_dados_valid:,:]
-        
+
         coluna = base_numpy.shape[1] - 1
         #X
         X_treino = Treino[:,:coluna]
         X_valid = Validacao[:,:coluna]
         X_teste = Teste[:,:coluna]
-        
+
         #Y
         y_treino = Treino[:,coluna] #tb pode ser usado o -1
         y_valid = Validacao[:,coluna]
@@ -592,27 +684,27 @@ class MultiTeste:
 
 
     ## procedimento de sorteio de exames
-    # considera como entrada o dataframe completo. 
+    # considera como entrada o dataframe completo.
     # Deve ser informado o nome da coluna em que se encontram
     # o nome dos pacientes para que o código faça a contagem.
-    # O percentual solicitado é a divisão que se deseja entre 
+    # O percentual solicitado é a divisão que se deseja entre
     # treino e teste.
     ##
     def sorteiaExamesValidacao(self, bancoDados, coluna):
         Pacientes = Counter(bancoDados[coluna])
         Pacientes_Numpy = np.array(list(Pacientes.items()))
-        
+
         soma_exames = 0
         for x in Pacientes_Numpy:
             soma_exames += int(x[1]) #somo a quantidade de exames de cada paciente
-        
+
         percent = 0.6 #percentual de exames para treinamento
         qtd_exames_treino = int(round(percent*soma_exames))
         qtd_exames_valid = int(round(0.2*soma_exames))
         qtd_exames_teste = soma_exames - qtd_exames_treino - qtd_exames_valid
-        
+
         dataset_numpy = np.array(bancoDados)
-        
+
         sorteados_valid = 0
         pacientes_valid = []
         while sorteados_valid < qtd_exames_valid:
@@ -621,11 +713,11 @@ class MultiTeste:
             Pacientes.pop(sorteado[0])
             for exame in np.where(dataset_numpy == sorteado[0])[0]:
                 pacientes_valid.append(dataset_numpy[exame])
-        
+
         #pacientes validação
         pacientes_valid = np.array(pacientes_valid)
-        
-        
+
+
         sorteados_teste = 0
         pacientes_teste = []
         while sorteados_teste < qtd_exames_teste:
@@ -634,11 +726,11 @@ class MultiTeste:
             Pacientes.pop(sorteado[0])
             for exame in np.where(dataset_numpy == sorteado[0])[0]:
                 pacientes_teste.append(dataset_numpy[exame])
-        
+
         #pacientes teste
         pacientes_teste = np.array(pacientes_teste)
         #pacientes_teste.shape
-        
+
         #montando conjunto diferença - pacientes treinamento
         pacientes_treinamento = []
         for restante in Pacientes:
@@ -647,36 +739,36 @@ class MultiTeste:
                 pacientes_treinamento.append(dataset_numpy[exame])
                 #pacientes_treinamento.append(exame)
         pacientes_treinamento = np.array(pacientes_treinamento)
-                
+
         paciente_treino_df = pd.DataFrame(pacientes_treinamento)
         paciente_teste_df = pd.DataFrame(pacientes_teste)
         paciente_valid_df = pd.DataFrame(pacientes_valid)
-        
+
         #eliminando coluna dos pacientes, considerando que é a 1a
         paciente_treino_df = paciente_treino_df.drop(0, axis=1)
         paciente_teste_df = paciente_teste_df.drop(0, axis=1)
         paciente_valid_df = paciente_valid_df.drop(0, axis=1)
-        
+
         #montagem dos y's
-        cols = paciente_treino_df.shape[1]        
+        cols = paciente_treino_df.shape[1]
         y_treino = paciente_treino_df[paciente_treino_df.columns[cols-1]]
         y_treino = np.array(y_treino, dtype=int)
         y_teste = paciente_teste_df[paciente_teste_df.columns[cols-1]]
         y_teste = np.array(y_teste, dtype=int)
         y_valid = paciente_valid_df[paciente_valid_df.columns[cols-1]]
         y_valid = np.array(y_valid, dtype=int)
-        
+
         #eliminando ultima coluna dos X
         paciente_treino_df = paciente_treino_df.drop(cols, axis=1)
         paciente_teste_df = paciente_teste_df.drop(cols, axis=1)
         paciente_valid_df = paciente_valid_df.drop(cols, axis=1)
-        
+
         #conversao dos X's
         X_treino = np.array(paciente_treino_df, dtype=float)
         X_teste = np.array(paciente_teste_df, dtype=float)
         X_valid = np.array(paciente_valid_df, dtype=float)
         return X_treino, X_valid, X_teste, y_treino, y_valid, y_teste
-    
+
     ## procedimento de treinamento onde escolhe-se a janela minima
      # de teste, retira-a da base e executa o treinamento com o restante.
      # Retorna a média da métrica selecionada.
@@ -684,7 +776,7 @@ class MultiTeste:
     def deixaUmFora(self, modelo, bancoDados, qtdRodadas, metrica):
         bancoDados = np.random.permutation(bancoDados)
         #tamJanela = np.ceil(len(bancoDados)/qtdRodadas)
-        
+
         resultado_metrica = 0
         tamanho = len(bancoDados)
         comprimento = tamanho//qtdRodadas
@@ -700,7 +792,7 @@ class MultiTeste:
             #y_treino = y_treino.reshape(y_treino.shape[0],1)
             X_teste = teste[:,1:-1]
             y_teste = teste[:,-1]
-            print(f"Alvo Y Treino: {utils.multiclass.type_of_target(y_treino)}")
+            #print(f"Alvo Y Treino: {utils.multiclass.type_of_target(y_treino)}")
             #y_teste = y_teste.reshape(y_teste.shape[0],1)
             #print(f"Formato Y treino: {type(y_treino)}")
             #print(f"Formato X treino: {type(X_treino)}")
@@ -709,9 +801,12 @@ class MultiTeste:
             resultado_metrica += metrica(y_teste, previsao)
 
         return resultado_metrica/qtdRodadas
-    
-    
-    
+
+    ## procedimento de treinamento onde escolhe-se a janela minima
+     # de teste, retira-a da base e executa o treinamento com o restante.
+     # Retorna os vetores para treino e teste.
+    ##
+    @jit(target_backend='cuda')
     def deixaUmForaXY(self, bancoDados, qtdRodadas):
         bancoDados = np.random.permutation(bancoDados)
         #tamJanela = np.ceil(len(bancoDados)/qtdRodadas)
@@ -744,21 +839,87 @@ class MultiTeste:
             ys_teste.append(y_teste)
             Xs_teste.append(X_teste)
             Xs_treino.append(X_treino)
+        return np.array(Xs_treino), np.array(ys_treino), np.array(Xs_teste), np.array(ys_teste)
+        #return np.array(Xs_treino, dtype=float), np.array(ys_treino, dtype=int), np.array(Xs_teste, dtype=float), np.array(ys_teste, dtype=int)
 
-        return np.array(Xs_treino, dtype=float), np.array(ys_treino, dtype=int), np.array(Xs_teste, dtype=float), np.array(ys_teste, dtype=int)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+    ## Código enviado pelo Pedro Ribeiro.
+    # Correção do método Classificador
+    ##
+    def Classificador2(self):
+        #seed = 10
+        splits = len(self.X_treino)
+        feature = self.X_treino
+        target = self.y_treino
+
+        algorithm = []
+        accuracy = []
+        #roc_auc = []
+        recall = []
+        precision = []
+        f1 = []
+        resultados = pd.DataFrame(columns=['algorithm','accuracy', 'recall', 'precision', 'f1'])
+        metricas_class = ['accuracy', 'recall', 'precision', 'f1']
+
+        for modelo in self.classificadores:
+            #print(f"Processando {modelo.__class__.__name__}")
+
+            kfold = model_selection.KFold(n_splits=splits, shuffle=False, random_state=None)
+            algorithm.append(modelo.__class__.__name__)
+            cv_results = model_selection.cross_val_predict(modelo, feature, target, cv=kfold)#,error_score=1)
+
+            tru = 0
+            fal = 0
+            truPos = 0
+            falNeg = 0
+            for i in range(len(target)):
+                if target[i] == cv_results[i]:
+                    tru += 1
+                else:
+                    fal += 1
+
+                if target[i] == cv_results[i] and target[i] == max(target):
+                    truPos += 1
+
+                if target[i] != cv_results[i] and target[i] == max(target):
+                    falNeg += 1
+
+            truNeg = tru-truPos
+
+            falPos = fal - falNeg
+
+            if (tru+fal) > 0:
+                acc = tru/(tru+fal)
+            else:
+                acc = 'nan'
+
+            if (truPos+falPos) > 0:
+                prec = truPos/(truPos+falPos)
+            else:
+                prec = 'nan'
+
+            if (truPos+falNeg) > 0:
+                rec = truPos/(truPos + falNeg)
+            else:
+                rec = 'nan'
+
+            if (2*truPos + fal) > 0:
+                f1score = (2*truPos)/(2*truPos + fal)
+            else:
+                f1score = 'nan'
+
+            accuracy.append(acc)
+            recall.append(rec)
+            precision.append(prec)
+            f1.append(f1score)
+
+        #print("Fim de Processamento.")
+
+        resultados['algorithm'] = algorithm
+        #resultados['roc_auc'] = roc_auc
+        resultados['accuracy'] = accuracy
+        resultados['recall'] = recall
+        resultados['precision'] = precision
+        resultados['f1'] = f1
+        return resultados
+
