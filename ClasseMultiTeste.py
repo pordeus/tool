@@ -279,8 +279,12 @@ class MultiTeste:
         return resultados
 
     # tipoDado = [binary, multiclasse=[weighted, sampled, etc]]
+    # Utilizart para casos de pequenas bases de dados
+    # quando há chance de dividsão por zero. 
+    # aviso: Há risco de erro por isso. 
+    # Este código precisa ser revisto.
     @jit(target_backend='cuda')
-    def ClassificadorMedico2(self, listaModelos):
+    def ClassificadorMedicoPeqDataset(self, listaModelos):
         algoritmos = []
         revogacao = []
         precisao = []
@@ -325,6 +329,36 @@ class MultiTeste:
         resultados['acurácia'] = acuracia
         return resultados
 
+    def ClassificadorMedico2(self, listaModelos):
+        algoritmos = []
+        revogacao = []
+        precisao = []
+        acuracia = []
+        f1 = []
+        resultados = pd.DataFrame(columns=['algoritmo', 'acurácia', 'f1', 'revogação', 'precisão'])
+        metricas_class = ["revogacao", "precisao", "f1", "acuracia"]
+        for modelo in listaModelos:
+            algoritmos.append(modelo.__class__.__name__)
+            modelo.fit(self.X_treino, self.y_treino)
+            y_pred_teste = modelo.predict(self.X_teste)
+            falsoPositivo, verdadeiroPositivo, falsoNegativo, verdadeiroNegativo = self.metricasBasicas(self.y_teste, y_pred_teste)
+            for metrica in metricas_class:
+                if metrica == "revogacao":
+                    revogacao.append(recall_score(self.y_teste, y_pred_teste))
+                if metrica == "precisao":
+                    precisao.append(precision_score(self.y_teste, y_pred_teste))
+                if metrica == "f1":
+                    f1.append(f1_score(self.y_teste, y_pred_teste))
+                if metrica == "acuracia":
+                    acuracia.append(accuracy_score(self.y_teste, y_pred_teste))
+        resultados['algoritmo'] = algoritmos
+        resultados['revogação'] = revogacao
+        resultados['precisão'] = precisao
+        resultados['f1'] = f1
+        resultados['acurácia'] = acuracia
+        return resultados
+
+    
     def ClassificadorMultiClasse(self, classes):
         #qtd_modelos = 0
         for modelo in self.classificadores:
